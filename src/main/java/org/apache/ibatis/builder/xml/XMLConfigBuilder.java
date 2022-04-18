@@ -48,14 +48,19 @@ import org.apache.ibatis.transaction.TransactionFactory;
 import org.apache.ibatis.type.JdbcType;
 
 /**
+ * XML配置构建器，建造者模式，继承baseBuilder
  * @author Clinton Begin
  * @author Kazuki Shimizu
  */
 public class XMLConfigBuilder extends BaseBuilder {
 
+  // 标识是否已经解析过mybatis-config.xml配置文件
   private boolean parsed;
+  // 用于解析mybatis-config.xml配置文件的XPathParser
   private final XPathParser parser;
+  // 标识<environment>配置的名称
   private String environment;
+  // ReflectorFactory负责创建和缓存Reflector对象
   private final ReflectorFactory localReflectorFactory = new DefaultReflectorFactory();
 
   public XMLConfigBuilder(Reader reader) {
@@ -66,7 +71,9 @@ public class XMLConfigBuilder extends BaseBuilder {
     this(reader, environment, null);
   }
 
+  // 构造函数，转换成XPathParser再去调用构造函数
   public XMLConfigBuilder(Reader reader, String environment, Properties props) {
+    // 构造一个需要验证，XMLMapperEntityResolver的XPathParser
     this(new XPathParser(reader, true, props, new XMLMapperEntityResolver()), environment, props);
   }
 
@@ -91,32 +98,48 @@ public class XMLConfigBuilder extends BaseBuilder {
     this.parser = parser;
   }
 
+  // 解析配置
   public Configuration parse() {
+    // 根据parsed变量的值判断是否已经完成了对mybatis-config.xml配置文件的解析
     if (parsed) {
       throw new BuilderException("Each XMLConfigBuilder can only be used once.");
     }
     parsed = true;
+    // 在mybatis-config.xml配置文件中查找<configuration>节点，并开始解析
     parseConfiguration(parser.evalNode("/configuration"));
     return configuration;
   }
 
+  // 解析<configuration>
   private void parseConfiguration(XNode root) {
     try {
       // issue #117 read properties first
+      // 解析propertis
       propertiesElement(root.evalNode("properties"));
+      // 解析settings
       Properties settings = settingsAsProperties(root.evalNode("settings"));
+      // 设置vfsImpl字段
       loadCustomVfs(settings);
       loadCustomLogImpl(settings);
+      // 解析类型别名
       typeAliasesElement(root.evalNode("typeAliases"));
+      // 解析插件
       pluginElement(root.evalNode("plugins"));
+      // 对象工厂
       objectFactoryElement(root.evalNode("objectFactory"));
+      // 对象包装工厂
       objectWrapperFactoryElement(root.evalNode("objectWrapperFactory"));
+      // 反射工厂
       reflectorFactoryElement(root.evalNode("reflectorFactory"));
       settingsElement(settings);
       // read it after objectFactory and objectWrapperFactory issue #631
+      // 环境
       environmentsElement(root.evalNode("environments"));
+      // databaseIdProvider
       databaseIdProviderElement(root.evalNode("databaseIdProvider"));
+      // 类型处理器
       typeHandlerElement(root.evalNode("typeHandlers"));
+      // 映射器
       mapperElement(root.evalNode("mappers"));
     } catch (Exception e) {
       throw new BuilderException("Error parsing SQL Mapper Configuration. Cause: " + e, e);
@@ -362,9 +385,15 @@ public class XMLConfigBuilder extends BaseBuilder {
     }
   }
 
+  // 自动扫描包下所有的映射器
+  // <mappers>
+  //  <package name="mapper"/>
+  // </mappers>
   private void mapperElement(XNode parent) throws Exception {
     if (parent != null) {
+      // 处理mapper子节点
       for (XNode child : parent.getChildren()) {
+        // package子节点
         if ("package".equals(child.getName())) {
           String mapperPackage = child.getStringAttribute("name");
           configuration.addMappers(mapperPackage);
