@@ -48,10 +48,15 @@ import org.apache.ibatis.session.SqlSession;
 public class DefaultSqlSession implements SqlSession {
 
   private final Configuration configuration;
+  // 底层依赖的Executor对象
   private final Executor executor;
 
+  // 是否自动提交
   private final boolean autoCommit;
+
+  // 当前缓存中是否有脏数据
   private boolean dirty;
+  // 为防止用户忘记关闭已打开的游标对象，会通过cursorList字段记录由SqlSession对象生成的游标对象，在DefaultSqlSession.cloase方法会统一关闭这些游标对象
   private List<Cursor<?>> cursorList;
 
   public DefaultSqlSession(Configuration configuration, Executor executor, boolean autoCommit) {
@@ -145,9 +150,12 @@ public class DefaultSqlSession implements SqlSession {
     return selectList(statement, parameter, rowBounds, Executor.NO_RESULT_HANDLER);
   }
 
+  // 核心selectList
   private <E> List<E> selectList(String statement, Object parameter, RowBounds rowBounds, ResultHandler handler) {
     try {
+      // 根据statement id找到对应的MappedStatement
       MappedStatement ms = configuration.getMappedStatement(statement);
+      // 转而用执行器来查询结果，注意这里传入的ResultHandler是null
       return executor.query(ms, wrapCollection(parameter), rowBounds, handler);
     } catch (Exception e) {
       throw ExceptionFactory.wrapException("Error querying database.  Cause: " + e, e);

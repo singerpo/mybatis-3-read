@@ -49,6 +49,7 @@ import org.apache.ibatis.type.JdbcType;
 
 /**
  * XML配置构建器，建造者模式，继承baseBuilder
+ *
  * @author Clinton Begin
  * @author Kazuki Shimizu
  */
@@ -168,7 +169,7 @@ public class XMLConfigBuilder extends BaseBuilder {
       for (String clazz : clazzes) {
         if (!clazz.isEmpty()) {
           @SuppressWarnings("unchecked")
-          Class<? extends VFS> vfsImpl = (Class<? extends VFS>)Resources.classForName(clazz);
+          Class<? extends VFS> vfsImpl = (Class<? extends VFS>) Resources.classForName(clazz);
           configuration.setVfsImpl(vfsImpl);
         }
       }
@@ -308,8 +309,8 @@ public class XMLConfigBuilder extends BaseBuilder {
           DataSourceFactory dsFactory = dataSourceElement(child.evalNode("dataSource"));
           DataSource dataSource = dsFactory.getDataSource();
           Environment.Builder environmentBuilder = new Environment.Builder(id)
-              .transactionFactory(txFactory)
-              .dataSource(dataSource);
+            .transactionFactory(txFactory)
+            .dataSource(dataSource);
           configuration.setEnvironment(environmentBuilder.build());
           break;
         }
@@ -395,26 +396,37 @@ public class XMLConfigBuilder extends BaseBuilder {
       for (XNode child : parent.getChildren()) {
         // package子节点
         if ("package".equals(child.getName())) {
+          // 自动扫描包下所有映射器
           String mapperPackage = child.getStringAttribute("name");
+          // 扫描指定的包，并向mapperRegistry注册mapper接口
           configuration.addMappers(mapperPackage);
         } else {
+          // 获取mapper节点的resource、url、class属性，三个属性互斥
           String resource = child.getStringAttribute("resource");
           String url = child.getStringAttribute("url");
           String mapperClass = child.getStringAttribute("class");
+          // 如果mapper节点指定了resource属性，则创建XMLMapperBuilder对象，并通过该对象解析resource属性指定的mapper配置文件
           if (resource != null && url == null && mapperClass == null) {
+            // 使用类路径
             ErrorContext.instance().resource(resource);
-            try(InputStream inputStream = Resources.getResourceAsStream(resource)) {
+            try (InputStream inputStream = Resources.getResourceAsStream(resource)) {
+              // 创建XMLMapperBuilder对象，解析映射配置文件
               XMLMapperBuilder mapperParser = new XMLMapperBuilder(inputStream, configuration, resource, configuration.getSqlFragments());
               mapperParser.parse();
             }
+            // 如果mapper节点指定了url属性，则创建XMLMapperBuilder对象，并通过该对象解析url属性指定的mapper配置文件
           } else if (resource == null && url != null && mapperClass == null) {
+            // 使用绝对url路径
             ErrorContext.instance().resource(url);
-            try(InputStream inputStream = Resources.getUrlAsStream(url)){
+            try (InputStream inputStream = Resources.getUrlAsStream(url)) {
+              // 创建XMLMapperBuilder对象，解析映射配置文件
               XMLMapperBuilder mapperParser = new XMLMapperBuilder(inputStream, configuration, url, configuration.getSqlFragments());
               mapperParser.parse();
             }
+            // 如果mapper节点指定了class属性，则向MapperRegistry注册该mapper接口
           } else if (resource == null && url == null && mapperClass != null) {
             Class<?> mapperInterface = Resources.classForName(mapperClass);
+            // 直接把这个映射加入配置
             configuration.addMapper(mapperInterface);
           } else {
             throw new BuilderException("A mapper element may only specify a url, resource or class, but not more than one.");

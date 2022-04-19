@@ -140,29 +140,38 @@ public abstract class BaseExecutor implements Executor {
   @Override
   public <E> List<E> query(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql) throws SQLException {
     ErrorContext.instance().resource(ms.getResource()).activity("executing a query").object(ms.getId());
+    // 检测当前Executor是否已经关闭
     if (closed) {
       throw new ExecutorException("Executor was closed.");
     }
+    // 非嵌套查询，并且select节点配置的flushCache属性为true时，才会清空一级缓存，flushCache配置项是影响一级缓存结果对象存活时长的第一个方面
     if (queryStack == 0 && ms.isFlushCacheRequired()) {
       clearLocalCache();
     }
     List<E> list;
     try {
+      // 增加查询层数
       queryStack++;
+      // 查询一级缓存
       list = resultHandler == null ? (List<E>) localCache.getObject(key) : null;
       if (list != null) {
+        // 针对存储过程调用的处理，在一级缓存命中时，获取缓存中保存的输出类型参数，并设置到用户传入的实参对象中
         handleLocallyCachedOutputParameters(ms, key, parameter, boundSql);
       } else {
+        // 调用doQuery方法完成数据库查询，并得到映射的结果对象
         list = queryFromDatabase(ms, parameter, rowBounds, resultHandler, key, boundSql);
       }
     } finally {
+      // 当前查询完成，查询层数减少
       queryStack--;
     }
     if (queryStack == 0) {
+      // 在最外层的查询结束时，所有嵌套查询也已经完成，相关缓存项也已经完全记载，所以在此触发DeferredLoad加载一级缓存中记录的嵌套查询的结果对象
       for (DeferredLoad deferredLoad : deferredLoads) {
         deferredLoad.load();
       }
       // issue #601
+      // 加载完成后，清空deferredLoads集合
       deferredLoads.clear();
       if (configuration.getLocalCacheScope() == LocalCacheScope.STATEMENT) {
         // issue #482
@@ -320,14 +329,20 @@ public abstract class BaseExecutor implements Executor {
 
   private <E> List<E> queryFromDatabase(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql) throws SQLException {
     List<E> list;
+    // 在缓存中添加占位符
     localCache.putObject(key, EXECUTION_PLACEHOLDER);
     try {
+      // 完成数据库查询操作，并返回结果对象
       list = doQuery(ms, parameter, rowBounds, resultHandler, boundSql);
     } finally {
+      // 删除占位符
       localCache.removeObject(key);
     }
+    // 将真正的结果对象添加到一级缓存中
     localCache.putObject(key, list);
+    // 是否是存储过程调用
     if (ms.getStatementType() == StatementType.CALLABLE) {
+      // 缓存输出类型的参数
       localOutputParameterCache.putObject(key, parameter);
     }
     return list;
